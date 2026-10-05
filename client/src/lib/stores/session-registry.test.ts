@@ -435,22 +435,24 @@ describe('SessionRegistry', () => {
       expect(registry.sessions['s1'].streamingMessage!.content[0].text).toBe('Hello world');
     });
 
-    it('message_update subtype start for tool_call sets toolCallId and toolName', () => {
+    it('message_update subtype start for tool_call preserves initial text and metadata', () => {
       registry.addSession('s1', '/path', 'proj');
       registry.handleEvent(makeSessionEvent('message_start', 's1', { role: 'assistant' }));
+      const initialArgs = '{"code":"text(1)"}';
       registry.handleEvent(
         makeSessionEvent('message_update', 's1', {
           contentIndex: 0,
           subtype: 'start',
-          content: { type: 'tool_call', text: '' },
+          content: { type: 'tool_call', text: initialArgs },
           toolCallId: 'tc1',
-          toolName: 'bash',
+          toolName: 'codemode',
         }),
       );
       const block = registry.sessions['s1'].streamingMessage!.content[0];
       expect(block.type).toBe('tool_call');
+      expect(block.text).toBe(initialArgs);
       expect(block.toolCallId).toBe('tc1');
-      expect(block.toolName).toBe('bash');
+      expect(block.toolName).toBe('codemode');
     });
 
     it('message_update with thinking content accumulates via delta', () => {
@@ -585,12 +587,12 @@ describe('SessionRegistry', () => {
       expect(exec.result).toBe('done');
     });
 
-    it('tool_execution_end reduces the SDK AgentToolResult wrapper to text plus data', () => {
+    it('tool_execution_end reduces all SDK AgentToolResult text blocks plus structured data', () => {
       registry.addSession('s1', '/path', 'proj');
       registry.handleEvent(
         makeSessionEvent('tool_execution_start', 's1', {
           toolCallId: 'tc2',
-          toolName: 'pimote_static_host',
+          toolName: 'codemode',
           args: {},
         }),
       );
@@ -598,17 +600,19 @@ describe('SessionRegistry', () => {
         makeSessionEvent('tool_execution_end', 's1', {
           toolCallId: 'tc2',
           result: {
-            content: [{ type: 'text', text: '{"slug":"demo"}' }],
-            details: { slug: 'demo' },
-            structuredContent: { slug: 'demo' },
+            content: [
+              { type: 'text', text: 'Script completed\nWall time 0.7 seconds\nOutput:\n' },
+              { type: 'text', text: 'Hello from the script' },
+            ],
+            details: { calls: [] },
           },
           isError: false,
         }),
       );
       const exec = registry.sessions['s1'].toolExecutions['tc2'];
       expect(exec.status).toBe('completed');
-      expect(exec.result).toBe('{"slug":"demo"}');
-      expect(exec.data).toEqual({ slug: 'demo' });
+      expect(exec.result).toBe('Script completed\nWall time 0.7 seconds\nOutput:\n\nHello from the script');
+      expect(exec.data).toEqual({ calls: [] });
     });
 
     it('toolResult message_end overwrites execution result with canonical data', () => {

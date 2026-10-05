@@ -112,8 +112,9 @@ function appendBoundedBashOutput(current: string, delta: string, maxBytes: numbe
 function reduceEndEventResult(result: unknown): { text: unknown; data: unknown } {
   if (result !== null && typeof result === 'object' && Array.isArray((result as { content?: unknown }).content)) {
     const wrapper = result as { content: Array<{ type: string; text?: string }>; details?: unknown; structuredContent?: unknown };
-    const textBlock = wrapper.content.find((block) => block.type === 'text');
-    return { text: textBlock?.text, data: wrapper.structuredContent ?? wrapper.details };
+    const textBlocks = wrapper.content.filter((block) => block.type === 'text' && typeof block.text === 'string');
+    const text = textBlocks.length > 0 ? textBlocks.map((block) => block.text).join('\n') : undefined;
+    return { text, data: wrapper.structuredContent ?? wrapper.details };
   }
   return { text: result, data: undefined };
 }
@@ -441,7 +442,7 @@ export class SessionRegistry {
         const update = event as MessageUpdateEvent;
         if (!session.streamingMessage) break;
         if (update.subtype === 'start') {
-          const block: PimoteMessageContent = { type: update.content.type, text: '', streaming: true };
+          const block: PimoteMessageContent = { type: update.content.type, text: update.content.text ?? '', streaming: true };
           if (update.content.type === 'tool_call') {
             block.toolCallId = update.toolCallId;
             block.toolName = update.toolName;

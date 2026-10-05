@@ -198,13 +198,8 @@ function mapContentBlocks(content: string | readonly AgentContentItem[]): Pimote
 export function mapAgentMessage(msg: AgentMessage): PimoteAgentMessage {
   switch (msg.role) {
     case 'toolResult': {
-      let text: string | undefined;
-      for (const c of msg.content) {
-        if (c.type === 'text') {
-          text = c.text;
-          break;
-        }
-      }
+      const textBlocks = msg.content.filter((c) => c.type === 'text').map((c) => c.text);
+      const text = textBlocks.length > 0 ? textBlocks.join('\n') : undefined;
       return {
         role: 'toolResult',
         content: [

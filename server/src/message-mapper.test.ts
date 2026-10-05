@@ -41,6 +41,19 @@ describe('mapAgentMessage', () => {
       expect(result.content).toEqual([{ type: 'tool_result', toolCallId: 'tc-1', toolName: 'read', result: 'file contents', isError: undefined }]);
     });
 
+    it('preserves every text block in codemode tool results', () => {
+      const result = m({
+        role: 'toolResult',
+        toolCallId: 'tc-codemode',
+        toolName: 'codemode',
+        content: [
+          { type: 'text', text: 'Script completed\nWall time 0.7 seconds\nOutput:\n' },
+          { type: 'text', text: 'Hello from the script' },
+        ],
+      });
+      expect(result.content[0]).toMatchObject({ result: 'Script completed\nWall time 0.7 seconds\nOutput:\n\nHello from the script' });
+    });
+
     it('forwards tool result details as structured data for the client', () => {
       const payload = { slug: 'demo', url: '/s/demo/' };
       const result = m({
