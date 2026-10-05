@@ -2,15 +2,14 @@
 
 ## Vision
 
-To build the IDE of the future.
+Pimote is a PWA and Node.js server for remote pi coding-agent sessions, complemented by a native Android voice-first client. This repository develops the shared protocol, server, web client, SDK, mobile app, and deployment tooling as one product.
 
-Pimote is a PWA + Node.js server for remote access to pi (a coding agent), plus a native Android client for voice-first usage including Android Auto. Workspaces: `server/` (Node.js HTTP+WS), `client/` (SvelteKit PWA), `packages/` (published npm packages including `@pimote/sdk`), `shared/` (protocol types), and `mobile/android/` (native Kotlin app, Docker-based Gradle build via `make android-build` / `make android-test`).
+## Lookup table
 
-## Project References
-
-- **Codemap**: [codemap.md](codemap.md) — module map, responsibilities, dependencies, file ownership
-- **Glossary**: [glossary.md](glossary.md) — the project's domain language — use its terms in code, docs, and conversation
-- **Deployment**: [Deployment.md](Deployment.md) — local hosting setup, systemd service, make targets (gitignored)
+- **Codemap**: [codemap.md](codemap.md) — modules, responsibilities, dependencies, and key files
+- **Glossary**: [glossary.md](glossary.md) — project terminology
+- **Fork maintenance**: [docs/fork-maintenance.md](docs/fork-maintenance.md) — remotes, release-based resynchronization, recovered changes, and deployment
+- **Local deployment overrides**: [Makefile.local.example](Makefile.local.example) — machine-local settings and deployment targets
 
 ## Maintenance Instructions
 
