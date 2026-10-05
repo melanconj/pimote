@@ -58,9 +58,10 @@ describe('createServer — file download route wiring', () => {
       downloads,
     );
     await server.start(0);
-    const port = (server.httpServer.address() as AddressInfo).port;
+    const address = server.httpServer.address() as AddressInfo;
+    expect(address.address).toBe('127.0.0.1');
 
-    const response = await fetch(`http://127.0.0.1:${port}/d/opaque-1`);
+    const response = await fetch(`http://127.0.0.1:${address.port}/d/opaque-1`);
 
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toBe('downloaded');

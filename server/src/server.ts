@@ -298,7 +298,8 @@ export async function createServer(
     clientRegistry,
     start(port: number): Promise<void> {
       return new Promise((resolve) => {
-        httpServer.listen(port, () => {
+        // Pimote is behind a reverse proxy; do not expose the server directly.
+        httpServer.listen(port, '127.0.0.1', () => {
           resolve();
         });
       });
