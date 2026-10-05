@@ -6,6 +6,9 @@ import {
   createAgentSessionServices,
   createAgentSessionFromServices,
   createEventBus,
+  createCodemodeExtension,
+  createToolSearchExtension,
+  createMcpExtension,
   ModelRuntime,
   getAgentDir,
   SessionManager as PiSessionManager,
@@ -35,6 +38,10 @@ export interface EventSocket {
 export interface SessionManagerOptions {
   staticHostFactory?: ExtensionFactory;
   fileDownloadFactory?: ExtensionFactory;
+}
+
+function createNativeExtensionFactories(): ExtensionFactory[] {
+  return [createCodemodeExtension({ mode: 'on' }), createToolSearchExtension(), createMcpExtension()];
 }
 
 export interface PendingUiEntry {
@@ -485,6 +492,7 @@ export class PimoteSessionManager {
     const staticHostFactory = this.staticHostFactory;
     const fileDownloadFactory = this.fileDownloadFactory;
     const extensionFactories = [
+      ...createNativeExtensionFactories(),
       ...(voiceExtensionFactory ? [voiceExtensionFactory] : []),
       ...(staticHostFactory ? [staticHostFactory] : []),
       ...(fileDownloadFactory ? [fileDownloadFactory] : []),
@@ -835,7 +843,7 @@ export interface ManagerSessionFactoryDeps {
  * Build the `ManagerSessionFactory` behind ManagerService: each call creates
  * one ephemeral pi session — an mkdtemp cwd (DR-006's chdir patch makes this
  * safe), `SessionManager.inMemory` (no persistence), and the manager extension
- * as the only extension. Streaming reuses the existing EventBuffer SDK→wire
+ * alongside native Pi extensions. Streaming reuses the EventBuffer SDK→wire
  * mapping, so manager output is byte-identical with regular sessions; mapped
  * events fan out to `onEvent` subscribers (manager sessions have no replay
  * cursor, so the buffer exists only to run the shared mapping).
@@ -865,7 +873,7 @@ async function buildManagerSession(tempDir: string, deps: ManagerSessionFactoryD
       modelRuntime: deps.modelRuntime,
       resourceLoaderOptions: {
         eventBus,
-        extensionFactories: [deps.managerExtensionFactory],
+        extensionFactories: [...createNativeExtensionFactories(), deps.managerExtensionFactory],
       },
     });
 

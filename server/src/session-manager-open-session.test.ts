@@ -2,8 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PushNotificationService } from './push-notification.js';
 import type { PimoteConfig } from './config.js';
 
-const { modelRuntime, modelRuntimeCreate, runtimeArgs, serviceArgs, openedSessionManagers, gitBranchSpy } = vi.hoisted(() => {
+const { modelRuntime, modelRuntimeCreate, runtimeArgs, serviceArgs, openedSessionManagers, gitBranchSpy, nativeExtensionFactories } = vi.hoisted(() => {
   const modelRuntime = { getAvailable: vi.fn(async () => []) };
+  const nativeExtensionFactories = {
+    codemode: vi.fn(),
+    toolSearch: vi.fn(),
+    mcp: vi.fn(),
+  };
   return {
     modelRuntime,
     modelRuntimeCreate: vi.fn(async () => modelRuntime),
@@ -11,6 +16,7 @@ const { modelRuntime, modelRuntimeCreate, runtimeArgs, serviceArgs, openedSessio
     serviceArgs: [] as Array<{ modelRuntime?: unknown; resourceLoaderOptions?: { extensionFactories?: unknown[] } }>,
     openedSessionManagers: [] as Array<{ getCwd(): string }>,
     gitBranchSpy: vi.fn(() => 'main'),
+    nativeExtensionFactories,
   };
 });
 
@@ -33,6 +39,9 @@ vi.mock('@earendil-works/pi-coding-agent', () => {
 
   return {
     ModelRuntime: { create: modelRuntimeCreate },
+    createCodemodeExtension: vi.fn(() => nativeExtensionFactories.codemode),
+    createToolSearchExtension: vi.fn(() => nativeExtensionFactories.toolSearch),
+    createMcpExtension: vi.fn(() => nativeExtensionFactories.mcp),
     getAgentDir: vi.fn(() => '/agent-dir'),
     createEventBus: vi.fn(() => ({
       on: vi.fn(() => () => {}),
@@ -63,6 +72,7 @@ vi.mock('@earendil-works/pi-coding-agent', () => {
       return {
         ...created,
         session: fakeSession,
+        dispose: vi.fn(async () => undefined),
       };
     }),
     SessionManager: {
@@ -77,11 +87,14 @@ vi.mock('@earendil-works/pi-coding-agent', () => {
       create: vi.fn((folderPath: string) => ({
         getCwd: () => folderPath,
       })),
+      inMemory: vi.fn((folderPath: string) => ({
+        getCwd: () => folderPath,
+      })),
     },
   };
 });
 
-import { PimoteSessionManager } from './session-manager.js';
+import { createManagerSessionFactory, PimoteSessionManager } from './session-manager.js';
 
 function createMockPushService(): PushNotificationService {
   return {
@@ -124,7 +137,7 @@ describe('PimoteSessionManager.openSession', () => {
     expect(serviceArgs[0]?.modelRuntime).toBe(modelRuntime);
   });
 
-  it('threads the dedicated download extension factory alongside static hosting into every runtime', async () => {
+  it('loads native Pi extensions alongside Pimote extensions in every runtime', async () => {
     runtimeArgs.length = 0;
     serviceArgs.length = 0;
     const staticHostFactory = (() => undefined) as any;
@@ -136,7 +149,29 @@ describe('PimoteSessionManager.openSession', () => {
 
     expect(serviceArgs).toHaveLength(2);
     expect(serviceArgs.map((args) => args.modelRuntime)).toEqual([modelRuntime, modelRuntime]);
-    expect(serviceArgs[0]?.resourceLoaderOptions?.extensionFactories).toEqual([staticHostFactory, fileDownloadFactory]);
-    expect(serviceArgs[1]?.resourceLoaderOptions?.extensionFactories).toEqual([staticHostFactory, fileDownloadFactory]);
+    const expectedFactories = [nativeExtensionFactories.codemode, nativeExtensionFactories.toolSearch, nativeExtensionFactories.mcp, staticHostFactory, fileDownloadFactory];
+    expect(serviceArgs[0]?.resourceLoaderOptions?.extensionFactories).toEqual(expectedFactories);
+    expect(serviceArgs[1]?.resourceLoaderOptions?.extensionFactories).toEqual(expectedFactories);
+  });
+
+  it('loads native Pi extensions alongside the manager extension', async () => {
+    serviceArgs.length = 0;
+    const managerExtensionFactory = vi.fn();
+    const createManagerSession = createManagerSessionFactory({
+      config: createTestConfig(),
+      modelRuntime: modelRuntime as any,
+      managerExtensionFactory: managerExtensionFactory as any,
+    });
+
+    const managerSession = await createManagerSession({ clientId: 'client-1' });
+
+    expect(serviceArgs).toHaveLength(1);
+    expect(serviceArgs[0]?.resourceLoaderOptions?.extensionFactories).toEqual([
+      nativeExtensionFactories.codemode,
+      nativeExtensionFactories.toolSearch,
+      nativeExtensionFactories.mcp,
+      managerExtensionFactory,
+    ]);
+    await managerSession.dispose();
   });
 });
