@@ -639,6 +639,9 @@ export class SessionRegistry {
 
       case 'session_state_changed': {
         const changed = event as SessionStateChangedEvent;
+        if (changed.sessionName !== undefined) {
+          session.sessionName = changed.sessionName || null;
+        }
         if (changed.gitBranch !== undefined) {
           for (const candidate of Object.values(this.sessions)) {
             if (candidate.folderPath === changed.folderPath) {

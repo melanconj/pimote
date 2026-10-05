@@ -3100,6 +3100,42 @@ describe('WsHandler', () => {
     });
   });
 
+  describe('set_session_name', () => {
+    it('sets an initial generated name when the session is unnamed', async () => {
+      const setSessionName = vi.fn();
+      const session = { ...createMockSlot().session, sessionName: undefined, setSessionName };
+      const slot = createMockSlot({ id: 'session-1', session });
+      const { handler, sent } = createTestHandler('client-1', { sessions: new Map([['session-1', slot]]) });
+
+      await handler.handleMessage(JSON.stringify({ type: 'set_session_name', sessionId: 'session-1', name: '  Generated title  ', id: 'req-set-name' }));
+
+      expect(setSessionName).toHaveBeenCalledWith('Generated title');
+      expect(findResponse(sent, 'req-set-name')).toMatchObject({ success: true });
+    });
+
+    it('does not replace an existing user-configured name', async () => {
+      const setSessionName = vi.fn();
+      const session = { ...createMockSlot().session, sessionName: 'User title', setSessionName };
+      const slot = createMockSlot({ id: 'session-1', session });
+      const { handler, sent } = createTestHandler('client-1', { sessions: new Map([['session-1', slot]]) });
+
+      await handler.handleMessage(JSON.stringify({ type: 'set_session_name', sessionId: 'session-1', name: 'Generated title', id: 'req-set-name' }));
+
+      expect(setSessionName).not.toHaveBeenCalled();
+      expect(session.sessionName).toBe('User title');
+      expect(findResponse(sent, 'req-set-name')).toMatchObject({ success: true });
+    });
+
+    it('rejects an empty generated name', async () => {
+      const slot = createMockSlot({ id: 'session-1' });
+      const { handler, sent } = createTestHandler('client-1', { sessions: new Map([['session-1', slot]]) });
+
+      await handler.handleMessage(JSON.stringify({ type: 'set_session_name', sessionId: 'session-1', name: '  ', id: 'req-set-name' }));
+
+      expect(findResponse(sent, 'req-set-name')).toMatchObject({ success: false, error: 'Session name cannot be empty' });
+    });
+  });
+
   describe('get_commands', () => {
     function createSessionWithSources(opts: {
       skills?: Array<{ name: string; description: string }>;

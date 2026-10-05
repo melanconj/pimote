@@ -91,6 +91,36 @@ describe('ProjectStore', () => {
       projectStore.sessions.delete('/r/gone');
     });
 
+    it('session_state_changed updates the session name for active sessions', () => {
+      const listener = [...eventListeners].at(-1)!;
+      projectStore.sessions.set('/r/named', [makeSession('s1', '2024-01-01T00:00:00Z')]);
+
+      listener({
+        type: 'session_state_changed',
+        folderPath: '/r/named',
+        sessionId: 's1',
+        liveStatus: 'idle',
+        connectedClientId: null,
+        folderActiveSessionCount: 1,
+        sessionName: 'Generated title',
+      } as PimoteEvent);
+
+      expect(projectStore.sessions.get('/r/named')![0].name).toBe('Generated title');
+
+      listener({
+        type: 'session_state_changed',
+        folderPath: '/r/named',
+        sessionId: 's1',
+        liveStatus: 'idle',
+        connectedClientId: null,
+        folderActiveSessionCount: 1,
+        sessionName: '',
+      } as PimoteEvent);
+
+      expect(projectStore.sessions.get('/r/named')![0].name).toBe('');
+      projectStore.sessions.delete('/r/named');
+    });
+
     it('session_renamed updates the session name in place', () => {
       const listener = [...eventListeners].at(-1)!;
       projectStore.sessions.set('/r/renamed', [makeSession('s1', '2024-01-01T00:00:00Z')]);

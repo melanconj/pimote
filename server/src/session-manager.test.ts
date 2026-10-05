@@ -187,6 +187,37 @@ describe('session lifecycle idle boundary', () => {
   });
 });
 
+describe('session metadata synchronization', () => {
+  it('requests a sidebar refresh when Pi changes session info', () => {
+    let listener: ((event: any) => void) | undefined;
+    const session = {
+      sessionId: 'metadata-test',
+      sessionName: undefined,
+      isStreaming: false,
+      messages: [],
+      subscribe: vi.fn((fn: (event: any) => void) => {
+        listener = fn;
+        return vi.fn();
+      }),
+    } as any;
+    const onStatusChange = vi.fn();
+    const state = createSessionState(
+      session,
+      { on: vi.fn(() => vi.fn()) } as any,
+      createTestConfig(),
+      { onStatusChange, sendEvent: vi.fn(), notify: vi.fn(async () => {}) },
+      { slot: null },
+      '/home/user/project',
+    );
+
+    session.sessionName = 'Generated title';
+    listener!({ type: 'session_info_changed', name: 'Generated title' });
+
+    expect(onStatusChange).toHaveBeenCalledWith('metadata-test', '/home/user/project');
+    state.unsubscribe();
+  });
+});
+
 describe('PimoteSessionManager — idle reaper', () => {
   beforeEach(() => {
     vi.useFakeTimers();

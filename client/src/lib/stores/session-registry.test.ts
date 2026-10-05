@@ -213,6 +213,25 @@ describe('SessionRegistry', () => {
       expect(registry.sessions['s2'].gitBranch).toBe('feature/worktree');
       expect(registry.sessions['s3'].gitBranch).toBe('release');
     });
+
+    it('session_state_changed updates and clears the session name', () => {
+      registry.addSession('s1', '/repo/app', 'app');
+      const stateChange = {
+        type: 'session_state_changed' as const,
+        sessionId: 's1',
+        folderPath: '/repo/app',
+        liveStatus: 'idle' as const,
+        connectedClientId: null,
+        folderActiveSessionCount: 1,
+        folderActiveStatus: 'idle' as const,
+      };
+
+      registry.handleEvent({ ...stateChange, sessionName: 'Generated title' });
+      expect(registry.sessions['s1'].sessionName).toBe('Generated title');
+
+      registry.handleEvent({ ...stateChange, sessionName: '' });
+      expect(registry.sessions['s1'].sessionName).toBeNull();
+    });
   });
 
   // --------------------------------------------------------------------------

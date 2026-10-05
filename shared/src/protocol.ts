@@ -409,6 +409,7 @@ export interface AutocompleteResponseItem {
   description?: string;
 }
 
+/** Set a fallback name for an unnamed session; use `rename_session` for user edits. */
 export interface SetSessionNameCommand extends CommandBase {
   type: 'set_session_name';
   name: string;
@@ -1028,7 +1029,7 @@ export interface SessionStateChangedEvent {
   folderActiveStatus: 'working' | 'idle' | 'attention' | null;
   /** Current git branch for the session folder (null when unavailable). */
   gitBranch?: string | null;
-  /** Session display name (from setSessionName). */
+  /** Current session display name; an empty string clears it. */
   sessionName?: string;
   /** First user message text, for sidebar display. */
   firstMessage?: string;

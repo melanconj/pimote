@@ -270,6 +270,10 @@ export function createSessionState(
       state.status = 'working';
       state.idleSince = null;
       callbacks.onStatusChange?.(sessionId, folderPath);
+    } else if (event.type === 'session_info_changed') {
+      // Session metadata is separate from streamed conversation events; refresh
+      // sidebar snapshots when Pi updates a session name.
+      callbacks.onStatusChange?.(sessionId, folderPath);
     } else if (event.type === 'agent_end' && !event.willRetry) {
       // Content/attempt-boundary work that must run at `agent_end`, NOT at the
       // later `agent_settled` idle boundary: if the run ended via abort and

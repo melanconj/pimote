@@ -1252,7 +1252,14 @@ export class WsHandler {
       }
 
       case 'set_session_name': {
-        session.setSessionName(command.name);
+        const name = typeof command.name === 'string' ? command.name.trim() : '';
+        if (!name) {
+          this.sendResponse(id, false, undefined, 'Session name cannot be empty');
+          break;
+        }
+        // Pi's generated name is a fallback. Preserve a name already chosen by
+        // the user; the explicit rename_session command remains authoritative.
+        if (!session.sessionName) session.setSessionName(name);
         this.sendResponse(id, true);
         break;
       }
@@ -1760,7 +1767,7 @@ export class WsHandler {
     let messageCount: number | undefined;
     if (slot) {
       const session = slot.session;
-      sessionName = session.sessionName || undefined;
+      sessionName = session.sessionName ?? '';
       messageCount = session.messages.length;
       const firstUserMsg = session.messages.find((m) => m.role === 'user');
       if (firstUserMsg) {
