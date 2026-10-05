@@ -5,6 +5,7 @@
   import { sessionRegistry } from '$lib/stores/session-registry.svelte.js';
   import { setEditorText } from '$lib/stores/input-bar.svelte.js';
   import { widgetLinesToCard } from '$lib/widget-cards.js';
+  import { sanitizeStatusText } from '$lib/status-text.js';
   import type { ExtensionUiRequestEvent } from '@pimote/shared';
   import CircleAlert from '@lucide/svelte/icons/circle-alert';
   import Info from '@lucide/svelte/icons/info';
@@ -48,7 +49,8 @@
 
       if (req.method === 'setStatus') {
         const key = req.key as string;
-        const text = req.text as string | undefined;
+        // The browser status row is plain text, not a TTY; keep glyphs and strip terminal controls.
+        const text = typeof req.text === 'string' ? sanitizeStatusText(req.text) : undefined;
         let sessionStatuses = statuses.get(req.sessionId);
         if (!sessionStatuses) {
           sessionStatuses = new SvelteMap<string, string>();
