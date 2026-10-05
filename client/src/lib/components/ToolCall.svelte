@@ -6,6 +6,7 @@
   import WriteFileBlock from './WriteFileBlock.svelte';
   import { createEditDiffStreamer, type EditArgs, type EditEntry } from '$lib/edit-diff.js';
   import { createWriteContentStreamer, extractWriteContent } from '$lib/write-content.js';
+  import { createCodemodeProgramStreamer, extractCodemodeProgram } from '$lib/codemode-display.js';
   import { inferLanguageFromPath } from '$lib/editor-language.js';
   import { observeFullyOffscreen } from '$lib/auto-collapse.js';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -40,6 +41,7 @@
   let isCompleted = $derived(isResult || result !== undefined);
   let isEdit = $derived(toolName === 'edit');
   let isWrite = $derived(toolName === 'write');
+  let isCodemode = $derived(toolName === 'codemode');
 
   // Streaming-diff state used only when isEdit.
   let streamer: ReturnType<typeof createEditDiffStreamer> | undefined = $state();
@@ -156,6 +158,37 @@
   let finalizedBody = $derived<string | undefined>(isWrite && content.args ? extractWriteContent(content.args) : undefined);
   let writeBody = $derived(isWrite ? (finalizedBody ?? streamingBody) : '');
 
+  let codemodeStreamer: ReturnType<typeof createCodemodeProgramStreamer> | undefined = $state();
+  let codemodeStreamerWritten = 0;
+  let streamedCodemodeProgram = $state<string | undefined>(undefined);
+
+  $effect(() => {
+    if (!isCodemode || isResult || !streaming) {
+      if (codemodeStreamer) {
+        codemodeStreamer.dispose();
+        codemodeStreamer = undefined;
+        codemodeStreamerWritten = 0;
+      }
+      return;
+    }
+    const text = content.text ?? '';
+    if (!text) return;
+    if (!codemodeStreamer) {
+      codemodeStreamer = createCodemodeProgramStreamer();
+      codemodeStreamerWritten = 0;
+    }
+    if (text.length > codemodeStreamerWritten) {
+      codemodeStreamer.write(text.slice(codemodeStreamerWritten));
+      codemodeStreamerWritten = text.length;
+      streamedCodemodeProgram = codemodeStreamer.program;
+    }
+  });
+
+  let codemodeProgram = $derived.by(() => {
+    if (!isCodemode || isResult) return undefined;
+    return extractCodemodeProgram(content.args) ?? streamedCodemodeProgram;
+  });
+
   let finalizedEntries = $derived<ReadonlyArray<EditEntry> | undefined>(isEdit && content.args ? ((content.args as EditArgs).edits ?? []) : undefined);
   // Prefer the finalized view once args are available; fall back to the
   // last streamed entries otherwise. This keeps the diff visible across
@@ -208,7 +241,7 @@
     }
   }
 
-  let argsText = $derived(streaming && !content.args ? (content.text ?? '') : formatData(content.args));
+  let argsText = $derived(isCodemode ? '' : streaming && !content.args ? (content.text ?? '') : formatData(content.args));
   // Prefer the structured payload when the text is just its serialization
   // (pimote tools stringify their payload into the text block) — renders as
   // pretty typed data instead of a compact JSON string. Built-in tools keep
@@ -249,7 +282,18 @@
 
   {#if expanded}
     <div class="tool-content">
-      {#if isEdit && editEntries.length > 0}
+      {#if isCodemode && !isResult}
+        <div class="tool-section">
+          <div class="tool-section-label">JavaScript program</div>
+          {#if codemodeProgram !== undefined}
+            <WriteFileBlock content={codemodeProgram} mode="code" language="javascript" streaming={streaming && !isCompleted} copyLabel="Copy program" />
+          {:else if streaming}
+            <div class="tool-placeholder">Waiting for program…</div>
+          {:else}
+            <div class="tool-placeholder">Program unavailable</div>
+          {/if}
+        </div>
+      {:else if isEdit && editEntries.length > 0}
         <div class="tool-section">
           <EditDiffBlock entries={editEntries} />
         </div>
@@ -338,6 +382,12 @@
 
   .tool-section + .tool-section {
     border-top: 1px solid var(--border);
+  }
+
+  .tool-placeholder {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    font-style: italic;
   }
 
   .tool-section-label {

@@ -25,6 +25,7 @@
     mode,
     language,
     streaming = false,
+    copyLabel = 'Copy file contents',
   }: {
     /** File body (streaming or finalized). */
     content: string;
@@ -34,6 +35,8 @@
     language: string | null;
     /** Drives throttled highlight + auto-scroll while true. */
     streaming?: boolean;
+    /** Accessible label for the copy button. */
+    copyLabel?: string;
   } = $props();
 
   const MAX_COLLAPSED_LINES = 20;
@@ -125,7 +128,7 @@
 </script>
 
 <div class="write-file-block" data-mode={mode} bind:this={rootEl}>
-  <button type="button" class="code-copy-btn" class:copied aria-label="Copy file contents" title="Copy file contents" onclick={copy}>
+  <button type="button" class="code-copy-btn" class:copied aria-label={copyLabel} title={copyLabel} onclick={copy}>
     {copied ? 'Copied' : 'Copy'}
   </button>
 
