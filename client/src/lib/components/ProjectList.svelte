@@ -2,6 +2,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import type { ProjectInfo, SessionInfo } from '@pimote/shared';
   import { projectStore } from '$lib/stores/project-store.svelte.js';
+  import { searchProjectsAndSessions } from '$lib/project-search.js';
   import { connection } from '$lib/stores/connection.svelte.js';
   import SessionItem from './SessionItem.svelte';
   import Archive from '@lucide/svelte/icons/archive';
@@ -75,30 +76,7 @@
     await updateProject(project, { addTags: [tag] });
   }
 
-  // Two-tier search: a project matching by name/path shows all its sessions;
-  // one matching only via session data shows just the matching sessions.
-  const searchResults = $derived.by(() => {
-    const query = projectSearch.trim().toLowerCase();
-    if (!query) return null;
-    const projects: ProjectInfo[] = [];
-    // Non-reactive derived output — recomputed wholesale on every query change.
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity
-    const sessionView = new Map<string, SessionInfo[]>();
-    for (const project of projectStore.visibleProjects) {
-      const sessions = projectStore.sessions.get(project.path) ?? [];
-      const tagMatch = (project.tags ?? []).some((t) => t.toLowerCase().includes(query));
-      const projectMatch = tagMatch || project.name.toLowerCase().includes(query) || project.path.toLowerCase().includes(query);
-      const sessionMatches = sessions.filter((s) => (s.name ?? '').toLowerCase().includes(query) || (s.firstMessage ?? '').toLowerCase().includes(query));
-      if (projectMatch) {
-        projects.push(project);
-        sessionView.set(project.path, sessions);
-      } else if (sessionMatches.length > 0) {
-        projects.push(project);
-        sessionView.set(project.path, sessionMatches);
-      }
-    }
-    return { projects, sessionView };
-  });
+  const searchResults = $derived(searchProjectsAndSessions(projectStore.visibleProjects, projectStore.sessions, projectSearch));
 
   const displayProjects = $derived(searchResults ? searchResults.projects : projectStore.visibleProjects);
 
