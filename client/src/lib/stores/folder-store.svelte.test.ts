@@ -954,4 +954,66 @@ describe('FolderStore.searchCandidates', () => {
 
     expect(rows.map((row) => row.path)).toEqual(['/r/virtual']);
   });
+
+  it('clears a pending search when the query becomes empty', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = new FolderStore();
+      const pending = store.searchCandidates('first');
+
+      await expect(store.searchCandidates('   ')).resolves.toEqual([]);
+      await expect(pending).resolves.toEqual([]);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(fakeConnection.send).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(['superseded', 'disconnected'] as const)('ignores an in-flight response after it is %s without settling a newer search', async (cancellation) => {
+    vi.useFakeTimers();
+    try {
+      const store = new FolderStore();
+      let resolveFirst!: (response: ReturnType<typeof okListFolders>) => void;
+      let resolveSecond!: (response: ReturnType<typeof okListFolders>) => void;
+      fakeConnection.send
+        .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
+        .mockImplementationOnce(() => new Promise((resolve) => (resolveSecond = resolve)));
+      const upsert = vi.spyOn(store, 'upsertFolder');
+      const first = store.searchCandidates('first');
+      await vi.advanceTimersByTimeAsync(250);
+      if (cancellation === 'disconnected') store.invalidateConnection();
+      const second = store.searchCandidates('second');
+      const secondSettled = vi.fn();
+      void second.then(secondSettled);
+      await expect(first).resolves.toEqual([]);
+      await vi.advanceTimersByTimeAsync(250);
+
+      resolveFirst(okListFolders([makeFolder({ path: '/r/stale', name: 'stale' })]));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(secondSettled).not.toHaveBeenCalled();
+      expect(upsert).not.toHaveBeenCalled();
+
+      const fresh = makeFolder({ path: '/r/fresh', name: 'fresh' });
+      resolveSecond(okListFolders([fresh]));
+      await expect(second).resolves.toEqual([fresh]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resolves pending searches when superseded or disconnected', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = new FolderStore();
+      const first = store.searchCandidates('first');
+      const second = store.searchCandidates('second');
+
+      await expect(first).resolves.toEqual([]);
+      store.invalidateConnection();
+      await expect(second).resolves.toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
