@@ -17,7 +17,6 @@
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import { parseAssistantError } from '$lib/assistant-error.js';
 
-  const MAX_COLLAPSED_LINES = 10;
   const SKILL_COLLAPSED_LINES = 3;
 
   let {
@@ -83,8 +82,12 @@
   let skillNeedsCollapse = $derived(skillLines.length > SKILL_COLLAPSED_LINES);
 
   let customText = $derived(getUserText(message));
-  let customLines = $derived(customText.split('\n'));
-  let customNeedsCollapse = $derived(customLines.length > MAX_COLLAPSED_LINES);
+  let customPreview = $derived(
+    customText
+      .split(/\r?\n/)
+      .map((line) => line.trim().replace(/\s+/g, ' '))
+      .find((line) => line.length > 0) ?? (streaming ? 'Waiting for output…' : 'No output'),
+  );
   let systemSections = $derived(message.role === 'system' ? ((message as PimoteAgentMessage).sections ?? {}) : {});
   let systemSectionNames = $derived(Object.keys(systemSections));
 </script>
@@ -236,40 +239,14 @@
   <!-- Custom message (extension-injected, e.g. subagent results) -->
   <div class="message custom-message">
     <div class="custom-body">
-      {#if streaming}
-        <div class="custom-header">
-          <span class="custom-label">[custom]</span>
-        </div>
+      <button class="custom-header" aria-expanded={customExpanded} onclick={() => (customExpanded = !customExpanded)}>
+        <ChevronRight class="shrink-0 transition-transform duration-150 {customExpanded ? 'rotate-90' : ''}" size={14} />
+        <span class="custom-label">[{'customType' in message ? (message.customType ?? 'custom') : 'custom'}]</span>
+        <span class="custom-preview">{customPreview}</span>
+      </button>
+      {#if customExpanded}
         <div class="custom-content">
           <StreamingCollapsible text={customText} {streaming} accent="purple" />
-        </div>
-      {:else}
-        <button class="custom-header" onclick={() => (customExpanded = !customExpanded)}>
-          {#if customNeedsCollapse}
-            {#if customExpanded}
-              <ChevronDown size={14} />
-            {:else}
-              <ChevronRight size={14} />
-            {/if}
-          {/if}
-          <span class="custom-label">[{'customType' in message ? (message.customType ?? 'custom') : 'custom'}]</span>
-          {#if customNeedsCollapse}
-            <span class="custom-line-count">{customLines.length} lines</span>
-          {/if}
-        </button>
-        <div class="custom-content">
-          <div
-            class="custom-text-container"
-            class:custom-text-collapsed={customNeedsCollapse && !customExpanded}
-            class:custom-text-expanded={customNeedsCollapse && customExpanded}
-          >
-            <TextBlock text={customText} />
-          </div>
-          {#if customNeedsCollapse && !customExpanded}
-            <button class="custom-toggle" onclick={() => (customExpanded = true)}> Show more… </button>
-          {:else if customNeedsCollapse && customExpanded}
-            <button class="custom-toggle" onclick={() => (customExpanded = false)}> Show less </button>
-          {/if}
         </div>
       {/if}
     </div>
@@ -635,59 +612,23 @@
   }
 
   .custom-label {
+    flex-shrink: 0;
     font-family: var(--font-mono, monospace);
   }
 
-  .custom-line-count {
+  .custom-preview {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
     color: var(--muted-foreground);
     font-weight: 400;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .custom-content {
     padding: 0 10px 8px;
     font-size: 0.85rem;
-  }
-
-  .custom-text-container {
-    position: relative;
-  }
-
-  .custom-text-collapsed {
-    max-height: 200px;
-    overflow: hidden;
-  }
-
-  .custom-text-collapsed::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 48px;
-    pointer-events: none;
-    background: linear-gradient(to bottom, oklch(0.2 0.02 270 / 0), oklch(0.2 0.02 270 / 0.95));
-  }
-
-  .custom-text-expanded {
-    max-height: 500px;
-    overflow-y: auto;
-  }
-
-  .custom-toggle {
-    display: inline-block;
-    margin-top: 4px;
-    padding: 0;
-    background: none;
-    border: none;
-    color: oklch(0.65 0.1 280);
-    font-size: 0.75rem;
-    cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  .custom-toggle:hover {
-    color: oklch(0.75 0.1 280);
   }
 
   /* ---- Mobile: stack icon row above body, open menu to the right ---- */
