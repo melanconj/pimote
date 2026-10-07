@@ -6,9 +6,14 @@ import type { Card } from '@pimote/shared';
  */
 export class PanelStore {
   cards: Card[] = $state([]);
+  desktopOpen = $state(true);
 
   get hasCards(): boolean {
     return this.cards.length > 0;
+  }
+
+  toggleDesktop(): void {
+    this.desktopOpen = !this.desktopOpen;
   }
 
   /** Replace the card list with new data from a panel_update event. */

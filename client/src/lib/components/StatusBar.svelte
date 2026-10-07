@@ -9,10 +9,11 @@
   import { updateStore } from '$lib/stores/update.svelte.js';
   import { getContextDisplay, getContextTone, getSessionDisplayName, formatCombinedCost } from '$lib/session-summary.js';
   import { getRestoreModeLabel } from '$lib/restore-status.js';
-  import { GitBranch, House } from '@lucide/svelte';
+  import { GitBranch, House, PanelRightClose, PanelRightOpen } from '@lucide/svelte';
   import SessionRenameDialog from './SessionRenameDialog.svelte';
   import CallButton from './CallButton.svelte';
   import DownloadInbox from './DownloadInbox.svelte';
+  import { panelStore } from '$lib/stores/panel-store.svelte.js';
 
   let restoreLabel = $derived(sessionRegistry.viewed?.isRestoring ? getRestoreModeLabel(sessionRegistry.viewed.restoreMode) : null);
   let connectionLabel = $derived(restoreLabel ?? connection.phaseLabel);
@@ -165,5 +166,21 @@
       </span>
       <span class="text-xs">{connectionLabel}</span>
     </div>
+
+    {#if panelStore.hasCards}
+      <button
+        type="button"
+        class="text-muted-foreground hover:text-foreground hover:bg-accent flex size-6 shrink-0 items-center justify-center rounded-md transition-colors"
+        title={panelStore.desktopOpen ? 'Close side panel' : 'Open side panel'}
+        aria-label={panelStore.desktopOpen ? 'Close side panel' : 'Open side panel'}
+        onclick={() => panelStore.toggleDesktop()}
+      >
+        {#if panelStore.desktopOpen}
+          <PanelRightClose class="size-4" />
+        {:else}
+          <PanelRightOpen class="size-4" />
+        {/if}
+      </button>
+    {/if}
   </div>
 </div>

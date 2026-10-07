@@ -281,7 +281,7 @@
   </div>
 
   <!-- Desktop panel (flex sibling of main content) -->
-  {#if panelStore.hasCards}
+  {#if panelStore.hasCards && panelStore.desktopOpen}
     <div class="hidden md:flex">
       <Panel />
     </div>

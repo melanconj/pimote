@@ -18,8 +18,22 @@ describe('PanelStore', () => {
       expect(store.cards).toEqual([]);
     });
 
+    it('starts with the desktop panel open', () => {
+      expect(store.desktopOpen).toBe(true);
+    });
+
     it('hasCards is false when empty', () => {
       expect(store.hasCards).toBe(false);
+    });
+  });
+
+  describe('desktop visibility', () => {
+    it('toggles the desktop panel open and closed', () => {
+      store.toggleDesktop();
+      expect(store.desktopOpen).toBe(false);
+
+      store.toggleDesktop();
+      expect(store.desktopOpen).toBe(true);
     });
   });
 
