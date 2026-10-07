@@ -191,8 +191,8 @@ describe('createStaticHostExtension', () => {
     expect((out.details as { removed: boolean }).removed).toBe(true);
   });
 
-  function navigateEvents(): Array<{ url: string }> {
-    return pi.emitted.filter((e) => e.type === 'pimote:navigate').map((e) => e.payload as { url: string });
+  function navigateEvents(): Array<{ url: string; target?: '_blank' }> {
+    return pi.emitted.filter((e) => e.type === 'pimote:navigate').map((e) => e.payload as { url: string; target?: '_blank' });
   }
 
   it('the register tool emits a single navigate event with the resolved url', async () => {
@@ -200,7 +200,7 @@ describe('createStaticHostExtension', () => {
     const folder = await bundle('demo');
     const tool = pi.toolDefs.find((t) => t.name === 'pimote_static_host')!;
     await tool.execute('call-1', { slug: 'demo', folder, title: 'Demo' }, undefined, undefined, makeCtx('sess-1'));
-    expect(navigateEvents()).toEqual([{ url: '/s/demo/' }]);
+    expect(navigateEvents()).toEqual([{ url: '/s/demo/', target: '_blank' }]);
   });
 
   it('session_start replay does not emit a navigate event', async () => {
@@ -230,6 +230,7 @@ describe('createStaticHostExtension', () => {
     expect(cards.some((c) => c.header.title === 'Demo')).toBe(true);
     const demoCard = cards.find((c) => c.header.title === 'Demo')!;
     expect(demoCard.href).toBe('/s/demo/');
+    expect(demoCard.target).toBe('_blank');
   });
 
   it('the remove tool unregisters, persists, and re-emits the panel snapshot', async () => {

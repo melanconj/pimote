@@ -48,10 +48,16 @@
       {/snippet}
       {#if card.href}
         <!-- card.href targets the server-hosted /s/<slug>/ route, not a SPA route, so resolve() does not apply. -->
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-        <a href={card.href} class="{baseClass} text-foreground hover:bg-accent/50 block no-underline transition-colors">
+        <!-- eslint-disable svelte/no-navigation-without-resolve -->
+        <a
+          href={card.href}
+          target={card.target}
+          rel={card.target === '_blank' ? 'noopener noreferrer' : undefined}
+          class="{baseClass} text-foreground hover:bg-accent/50 block no-underline transition-colors"
+        >
           {@render cardBody()}
         </a>
+        <!-- eslint-enable svelte/no-navigation-without-resolve -->
       {:else}
         <div class={baseClass}>
           {@render cardBody()}
