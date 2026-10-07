@@ -913,4 +913,19 @@ describe('FolderStore.searchCandidates', () => {
 
     expect(rows.map((row) => row.path)).toEqual(['/r/virtual']);
   });
+
+  it('resolves pending searches when superseded or disconnected', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = new FolderStore();
+      const first = store.searchCandidates('first');
+      const second = store.searchCandidates('second');
+
+      await expect(first).resolves.toEqual([]);
+      store.invalidateConnection();
+      await expect(second).resolves.toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

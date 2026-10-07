@@ -2,11 +2,10 @@
   import { untrack } from 'svelte';
   import HomeToolbar from '$lib/components/HomeToolbar.svelte';
   import FolderList from '$lib/components/FolderList.svelte';
-  import { isPlaceholderSessionId, submitManagerMessage, type ManagerSubmitPorts } from '$lib/manager-composer.js';
+  import { sendManagerMessage } from '$lib/stores/manager-submit.js';
   import { closeOpenSwipeCard } from '$lib/components/SwipeableCard.svelte';
   import { folderStore } from '$lib/stores/folder-store.svelte.js';
   import { connection } from '$lib/stores/connection.svelte.js';
-  import { openNewSession, sessionRegistry, switchToSession } from '$lib/stores/session-registry.svelte.js';
 
   let search = $state('');
   let scrollElement = $state<HTMLDivElement | null>(null);
@@ -15,38 +14,12 @@
   let managerBusy = $state(false);
   let managerReady = $derived(connection.ready && connection.managerRoot !== null);
 
-  const managerPorts: ManagerSubmitPorts = {
-    openManagerSession: async (managerRoot) => {
-      const response = await openNewSession(managerRoot);
-      const sessionId = (response.data as { sessionId?: string } | undefined)?.sessionId;
-      return { success: response.success, ...(sessionId !== undefined ? { sessionId } : {}) };
-    },
-    prompt: async (sessionId, message) => {
-      try {
-        return (await connection.send({ type: 'prompt', sessionId, message })).success;
-      } catch (e) {
-        console.error('Failed to prompt manager session:', e);
-        return false;
-      }
-    },
-    switchToSession,
-  };
-
   async function submitManagerDraft(text: string): Promise<void> {
     const managerRoot = connection.managerRoot;
     if (!managerRoot || !managerReady) return;
     managerBusy = true;
     try {
-      const viewed = sessionRegistry.viewed;
-      const sent = await submitManagerMessage(
-        {
-          viewed: viewed ? { sessionId: viewed.sessionId } : undefined,
-          viewedIsManager: viewed != null && !isPlaceholderSessionId(viewed.sessionId) && viewed.folderPath === managerRoot,
-          managerRoot,
-          text,
-        },
-        managerPorts,
-      );
+      const sent = await sendManagerMessage(text);
       if (sent) managerDraft = '';
     } finally {
       managerBusy = false;

@@ -96,6 +96,7 @@ export class FolderStore {
   private searchWaiters: Array<() => void> = [];
   private candidateSearchTimer: ReturnType<typeof setTimeout> | null = null;
   private candidateSearchGeneration = 0;
+  private candidateSearchWaiters: Array<{ generation: number; resolve: (folders: FolderInfo[]) => void }> = [];
   private sessionLoadsInFlight: Map<string, InFlightSessionLoad> = new Map(); // eslint-disable-line svelte/prefer-svelte-reactivity -- in-flight request registry, not reactive UI state
   private nextSessionRequestId = 0;
   /** Newest wire epoch seen. Older response computations cannot overwrite deltas. */
@@ -209,14 +210,33 @@ export class FolderStore {
    */
   searchCandidates(query: string): Promise<FolderInfo[]> {
     const trimmed = query.trim();
-    const generation = ++this.candidateSearchGeneration;
     if (this.candidateSearchTimer !== null) clearTimeout(this.candidateSearchTimer);
+    this.candidateSearchTimer = null;
+    this.resolveCandidateSearchWaiters([]);
+    const generation = ++this.candidateSearchGeneration;
+    if (!trimmed) return Promise.resolve([]);
+
     return new Promise((resolve) => {
+      this.candidateSearchWaiters.push({ generation, resolve });
       this.candidateSearchTimer = setTimeout(() => {
         this.candidateSearchTimer = null;
-        void this.fetchCandidates(trimmed, generation).then(resolve);
+        void this.fetchCandidates(trimmed, generation).then((folders) => this.resolveCandidateSearchWaitersForGeneration(generation, folders));
       }, 250);
     });
+  }
+
+  private resolveCandidateSearchWaiters(folders: FolderInfo[]): void {
+    for (const waiter of this.candidateSearchWaiters) waiter.resolve(folders);
+    this.candidateSearchWaiters = [];
+  }
+
+  private resolveCandidateSearchWaitersForGeneration(generation: number, folders: FolderInfo[]): void {
+    const remaining: typeof this.candidateSearchWaiters = [];
+    for (const waiter of this.candidateSearchWaiters) {
+      if (waiter.generation === generation) waiter.resolve(folders);
+      else remaining.push(waiter);
+    }
+    this.candidateSearchWaiters = remaining;
   }
 
   private async fetchCandidates(query: string, generation: number): Promise<FolderInfo[]> {
@@ -273,6 +293,7 @@ export class FolderStore {
     if (this.candidateSearchTimer !== null) clearTimeout(this.candidateSearchTimer);
     this.candidateSearchTimer = null;
     this.candidateSearchGeneration++;
+    this.resolveCandidateSearchWaiters([]);
   }
 
   /** Only an explicit refresh replaces an established connection pin. */

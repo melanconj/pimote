@@ -24,6 +24,7 @@
   import DownloadInbox from '$lib/components/DownloadInbox.svelte';
   import SessionDetailsDialog from '$lib/components/SessionDetailsDialog.svelte';
   import SessionRenameDialog from '$lib/components/SessionRenameDialog.svelte';
+  import SessionSwitcher from '$lib/components/SessionSwitcher.svelte';
   import { getContextDisplay, getContextTone, getSessionDisplayName } from '$lib/session-summary.js';
   import { getAppName } from '$lib/branding.js';
   import PanelRight from '@lucide/svelte/icons/panel-right';
@@ -350,6 +351,9 @@
 
   <!-- Tree navigation dialog -->
   <TreeDialog />
+
+  <!-- Global project/session command palette -->
+  <SessionSwitcher />
 
   <!-- Provider login dialog -->
   <LoginDialog />
