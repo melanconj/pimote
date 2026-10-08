@@ -7,6 +7,7 @@
   import { createEditDiffStreamer, type EditArgs, type EditEntry } from '$lib/edit-diff.js';
   import { createWriteContentStreamer, extractWriteContent } from '$lib/write-content.js';
   import { createCodemodeProgramStreamer, extractCodemodeProgram } from '$lib/codemode-display.js';
+  import { createBashCommandStreamer, extractBashCommand } from '$lib/bash-display.js';
   import { inferLanguageFromPath } from '$lib/editor-language.js';
   import { observeFullyOffscreen } from '$lib/auto-collapse.js';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
@@ -42,6 +43,7 @@
   let isEdit = $derived(toolName === 'edit');
   let isWrite = $derived(toolName === 'write');
   let isCodemode = $derived(toolName === 'codemode');
+  let isBash = $derived(toolName === 'bash');
 
   // Streaming-diff state used only when isEdit.
   let streamer: ReturnType<typeof createEditDiffStreamer> | undefined = $state();
@@ -189,6 +191,37 @@
     return extractCodemodeProgram(content.args) ?? streamedCodemodeProgram;
   });
 
+  let bashCommandStreamer: ReturnType<typeof createBashCommandStreamer> | undefined = $state();
+  let bashStreamerWritten = 0;
+  let streamedBashCommand = $state<string | undefined>(undefined);
+
+  $effect(() => {
+    if (!isBash || isResult || !streaming) {
+      if (bashCommandStreamer) {
+        bashCommandStreamer.dispose();
+        bashCommandStreamer = undefined;
+        bashStreamerWritten = 0;
+      }
+      return;
+    }
+    const text = content.text ?? '';
+    if (!text) return;
+    if (!bashCommandStreamer) {
+      bashCommandStreamer = createBashCommandStreamer();
+      bashStreamerWritten = 0;
+    }
+    if (text.length > bashStreamerWritten) {
+      bashCommandStreamer.write(text.slice(bashStreamerWritten));
+      bashStreamerWritten = text.length;
+      streamedBashCommand = bashCommandStreamer.command;
+    }
+  });
+
+  let bashCommand = $derived.by(() => {
+    if (!isBash || isResult) return undefined;
+    return extractBashCommand(content.args) ?? streamedBashCommand;
+  });
+
   let finalizedEntries = $derived<ReadonlyArray<EditEntry> | undefined>(isEdit && content.args ? ((content.args as EditArgs).edits ?? []) : undefined);
   // Prefer the finalized view once args are available; fall back to the
   // last streamed entries otherwise. This keeps the diff visible across
@@ -241,7 +274,7 @@
     }
   }
 
-  let argsText = $derived(isCodemode ? '' : streaming && !content.args ? (content.text ?? '') : formatData(content.args));
+  let argsText = $derived(isCodemode || (isBash && bashCommand !== undefined) ? '' : streaming && !content.args ? (content.text ?? '') : formatData(content.args));
   // Prefer the structured payload when the text is just its serialization
   // (pimote tools stringify their payload into the text block) — renders as
   // pretty typed data instead of a compact JSON string. Built-in tools keep
@@ -291,6 +324,15 @@
             <div class="tool-placeholder">Waiting for program…</div>
           {:else}
             <div class="tool-placeholder">Program unavailable</div>
+          {/if}
+        </div>
+      {:else if isBash && !isResult && (bashCommand !== undefined || streaming)}
+        <div class="tool-section">
+          <div class="tool-section-label">Bash command</div>
+          {#if bashCommand !== undefined}
+            <WriteFileBlock content={bashCommand} mode="code" language="bash" streaming={streaming && !isCompleted} copyLabel="Copy command" />
+          {:else}
+            <div class="tool-placeholder">Waiting for command…</div>
           {/if}
         </div>
       {:else if isEdit && editEntries.length > 0}
