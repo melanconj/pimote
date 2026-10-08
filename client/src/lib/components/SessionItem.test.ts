@@ -181,6 +181,21 @@ describe('session row swipe trays', () => {
     expect(trayLabels()).not.toContain('Archive');
   });
 
+  it('archives a session from its visible action button', async () => {
+    render(idleSession);
+    await tick();
+
+    target.querySelector<HTMLButtonElement>('[aria-label="Archive session"]')!.click();
+    await tick();
+
+    expect(connection.send).toHaveBeenCalledWith({
+      type: 'archive_session',
+      folderPath,
+      sessionIds: [idleSession.id],
+      archived: true,
+    });
+  });
+
   it('keeps one context menu per row — the swipe card does not nest a second', async () => {
     render(openSession);
     await tick();

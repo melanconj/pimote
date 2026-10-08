@@ -133,38 +133,53 @@
     >
       <ContextMenu.Root>
         <ContextMenu.Trigger class="bg-background w-full">
-          <button
-            class="active:bg-sidebar-accent/80 w-full rounded-md px-3 py-2 text-left transition-colors active:scale-[0.97] max-md:min-h-11 max-md:py-2.5 {isActive
-              ? 'bg-sidebar-accent'
-              : 'hover:bg-sidebar-accent'}"
-            onclick={openSession}
-          >
-            <div class="flex items-center gap-2">
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <div class="text-sidebar-foreground min-w-0 flex-1 truncate text-sm font-medium {session.archived ? 'opacity-70' : ''}">
-                    {displayName()}
+          <div class="flex w-full items-stretch gap-1">
+            <button
+              class="active:bg-sidebar-accent/80 min-w-0 flex-1 rounded-l-md px-3 py-2 text-left transition-colors active:scale-[0.97] max-md:min-h-11 max-md:py-2.5 {isActive
+                ? 'bg-sidebar-accent'
+                : 'hover:bg-sidebar-accent'}"
+              onclick={openSession}
+            >
+              <div class="flex items-center gap-2">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <div class="text-sidebar-foreground min-w-0 flex-1 truncate text-sm font-medium {session.archived ? 'opacity-70' : ''}">
+                      {displayName()}
+                    </div>
+                    {#if session.archived}
+                      <span class="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase">Archived</span>
+                    {/if}
                   </div>
-                  {#if session.archived}
-                    <span class="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase">Archived</span>
+                  {#if cwdLabel}
+                    <div class="text-muted-foreground mt-0.5 truncate text-xs italic {session.archived ? 'opacity-70' : ''}" title={session.cwd}>
+                      {cwdLabel}
+                    </div>
                   {/if}
-                </div>
-                {#if cwdLabel}
-                  <div class="text-muted-foreground mt-0.5 truncate text-xs italic {session.archived ? 'opacity-70' : ''}" title={session.cwd}>
-                    {cwdLabel}
+                  <div class="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs {session.archived ? 'opacity-70' : ''}">
+                    <span>{session.messageCount} msg{session.messageCount !== 1 ? 's' : ''}</span>
+                    <span>·</span>
+                    <span>{formatRelativeTime(session.modified)}</span>
                   </div>
-                {/if}
-                <div class="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs {session.archived ? 'opacity-70' : ''}">
-                  <span>{session.messageCount} msg{session.messageCount !== 1 ? 's' : ''}</span>
-                  <span>·</span>
-                  <span>{formatRelativeTime(session.modified)}</span>
                 </div>
+                {#if isActive}
+                  <div class="bg-status-connected size-2 shrink-0 rounded-full"></div>
+                {/if}
               </div>
-              {#if isActive}
-                <div class="bg-status-connected size-2 shrink-0 rounded-full"></div>
+            </button>
+            <button
+              type="button"
+              class="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground active:bg-sidebar-accent/80 focus-visible:ring-ring flex size-9 shrink-0 items-center justify-center self-center rounded-md transition-colors focus-visible:ring-1 focus-visible:outline-none max-md:size-11"
+              title={session.archived ? 'Unarchive session' : 'Archive session'}
+              aria-label={session.archived ? 'Unarchive session' : 'Archive session'}
+              onclick={() => void setArchived(!session.archived)}
+            >
+              {#if session.archived}
+                <Undo2 class="size-4" />
+              {:else}
+                <Archive class="size-4" />
               {/if}
-            </div>
-          </button>
+            </button>
+          </div>
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content class="bg-popover text-popover-foreground ring-foreground/10 z-50 min-w-36 overflow-hidden rounded-lg p-1 shadow-md ring-1">
