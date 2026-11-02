@@ -345,6 +345,10 @@ lists interplay, and rendered-row-only session loading.
 
 The home page shows the desktop Settings gear at bottom-left and an in-flow Settings button at the left of the mobile header. The app name sits immediately to its right on mobile. The button exists only on the dashboard. Opening it requests one server-resolved manifest containing effective Pi files, native Pimote config, configured files, and Pimote extension registrations. Tabs load lazily and retain independent drafts, dirty markers, missing-file creation hints, and per-file saves. Markdown tabs show the validated capability tag palette. Desktop actions stay in the footer. Mobile actions stay in the header. Close with dirty tabs asks once to keep editing or discard.
 
+Folder-row and session-details instruction controls open the folder-scoped editor with an AGENTS.md / AGENTS.override.md selector. Verify missing-file creation, dirty-switch confirmation and cancellation, saving/reading errors, and independent undo history across files. The override replaces AGENTS.md in the same folder for Pi. Global Settings remains a separate home-only experience.
+
+Selector coverage lives in `ConfigFileEditor.test.ts` and `file-editor.svelte.test.ts`; folder controls are covered by `FolderInstructionsControls.test.ts`. Journey-level clicks remain manual-browser.
+
 Verify both breakpoints, server-resolved paths and labels, manifest stability until reopen, missing-file creation, invalid native-config rejection, symlink validation, multi-client capability broadcasts, dynamic consumer policies, extension reload diagnostics, user-package filtering, and retained folder-row AGENTS.md editing. Use the existing manual-test harness and browser driver. The User tab (first tab, `per-user-open-session-state` topic) is the device's connection identity: name field, profile chips with session counts from `list_users`, click-to-adopt, deliberate-switch consequence copy, and Save (desktop footer / mobile header) that persists `pimote:user` and reconnects.
 
 ## 14. One user, many devices: the shared open-session set

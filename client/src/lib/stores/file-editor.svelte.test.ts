@@ -20,13 +20,9 @@ function fakeSend(handler: (command: PimoteCommand) => PimoteResponse | Promise<
   return { send: send as unknown as SendCommand, calls };
 }
 
-/** A send that answers file_get for the target file and the config file separately. */
-function routingSend(target: PimoteResponse | (() => Promise<PimoteResponse>), config?: PimoteResponse | (() => Promise<PimoteResponse>)) {
+function routingSend(target: PimoteResponse | (() => Promise<PimoteResponse>)) {
   return fakeSend(async (command) => {
     if (command.type !== 'file_get') return { id: command.id ?? '', success: true, data: {} };
-    if (command.path === '~/.config/pimote/config.json') {
-      return config ? (typeof config === 'function' ? config() : config) : { id: command.id ?? '', success: true, data: { path: '/c', exists: false, content: '' } };
-    }
     return typeof target === 'function' ? target() : target;
   });
 }
@@ -91,6 +87,99 @@ describe('openFile', () => {
 
     expect(store.content).toBe('second');
     expect(store.title).toBe('B');
+  });
+});
+
+describe('folder instruction switching', () => {
+  it('loads each sibling and creates a missing override on save', async () => {
+    const { send, calls } = fakeSend((command) => {
+      if (command.type === 'file_get') {
+        const exists = command.path.endsWith('/AGENTS.md');
+        return { id: '1', success: true, data: { path: command.path, exists, content: exists ? 'shared' : '' } };
+      }
+      return { id: '1', success: true, data: {} };
+    });
+    const store = new FileEditorStore(send);
+    await store.openFolderInstructions('/workspace/project/', 'Project');
+    expect(store.path).toBe('/workspace/project/AGENTS.md');
+    expect(store.title).toBe('AGENTS.md — Project');
+
+    await store.switchFolderInstructions('AGENTS.override.md');
+    expect(store.path).toBe('/workspace/project/AGENTS.override.md');
+    expect(store.title).toBe('AGENTS.override.md — Project');
+    expect(store.loaded).toBe(true);
+    expect(store.exists).toBe(false);
+    expect(store.content).toBe('');
+    store.content = 'personal';
+    expect(await store.save()).toBe(true);
+    expect(calls).toContainEqual({ type: 'file_put', path: '/workspace/project/AGENTS.override.md', content: 'personal' });
+    expect(store.folderInstructions).toBeNull();
+  });
+
+  it('does not expose the folder selector for a generic file open', async () => {
+    const { send, calls } = routingSend(fileGetResponse('body'));
+    const store = new FileEditorStore(send);
+    await store.openFolderInstructions('/project');
+    await store.openFile('/other/instructions.md', 'Other instructions');
+    expect(store.folderInstructions).toBeNull();
+    await store.switchFolderInstructions('AGENTS.override.md');
+    expect(store.path).toBe('/other/instructions.md');
+    expect(calls).toHaveLength(2);
+  });
+
+  it.each(['response', 'rejection'])('ignores a stale load %s error while a newer file loads', async (failure) => {
+    let failOverride: () => void = () => {};
+    const override = new Promise<PimoteResponse>((resolve, reject) => {
+      failOverride = () => {
+        if (failure === 'rejection') reject(new Error('stale error'));
+        else resolve({ id: '1', success: false, error: 'stale error' });
+      };
+    });
+    let resolveAgents: (response: PimoteResponse) => void = () => {};
+    const agents = new Promise<PimoteResponse>((resolve) => (resolveAgents = resolve));
+    let agentsReads = 0;
+    const { send } = fakeSend((command) => {
+      if (command.type === 'file_get' && command.path.endsWith('/AGENTS.override.md')) return override;
+      if (++agentsReads > 1) return agents;
+      return fileGetResponse('shared');
+    });
+    const store = new FileEditorStore(send);
+    await store.openFolderInstructions('/project');
+    const stale = store.switchFolderInstructions('AGENTS.override.md');
+    const current = store.switchFolderInstructions('AGENTS.md');
+    failOverride();
+    await stale;
+    expect(store.error).toBeNull();
+    expect(store.loading).toBe(true);
+    expect(store.loaded).toBe(false);
+
+    resolveAgents(fileGetResponse('current'));
+    await current;
+    expect(store.content).toBe('current');
+    expect(store.loading).toBe(false);
+  });
+
+  it('ignores stale loads and refuses to save a failed switch', async () => {
+    let resolveOverride: (response: PimoteResponse) => void = () => {};
+    const pending = new Promise<PimoteResponse>((resolve) => (resolveOverride = resolve));
+    let agentsReads = 0;
+    const { send, calls } = fakeSend((command) => {
+      if (command.type !== 'file_get') return { id: '1', success: true, data: {} };
+      if (command.path.endsWith('/AGENTS.override.md')) return pending;
+      if (command.path.endsWith('/AGENTS.md') && ++agentsReads > 1) return { id: '1', success: false, error: 'EACCES' };
+      return { id: '1', success: true, data: { path: command.path, exists: true, content: 'shared' } };
+    });
+    const store = new FileEditorStore(send);
+    await store.openFolderInstructions('/project');
+    const stale = store.switchFolderInstructions('AGENTS.override.md');
+    await store.switchFolderInstructions('AGENTS.md');
+    resolveOverride(fileGetResponse('stale override'));
+    await stale;
+    expect(store.path).toBe('/project/AGENTS.md');
+    expect(store.error).toBe('EACCES');
+    expect(store.loaded).toBe(false);
+    expect(await store.save()).toBe(false);
+    expect(calls.filter((call) => call.type === 'file_put')).toEqual([]);
   });
 });
 
@@ -206,7 +295,6 @@ describe('save', () => {
   it('refuses to save after a failed load (never truncates the file)', async () => {
     const { send, calls } = fakeSend(async (command) => {
       if (command.type !== 'file_get') return { id: command.id ?? '', success: true, data: {} };
-      if (command.path === '~/.config/pimote/config.json') return { id: command.id ?? '', success: true, data: { path: '/c', exists: false, content: '' } };
       return { id: command.id ?? '', success: false, error: 'EACCES' };
     });
     const store = new FileEditorStore(send);
@@ -221,7 +309,6 @@ describe('save', () => {
     const pendingGet = new Promise<PimoteResponse>((resolve) => (resolveGet = resolve));
     const { send, calls } = fakeSend(async (command) => {
       if (command.type !== 'file_get') return { id: command.id ?? '', success: true, data: {} };
-      if (command.path === '~/.config/pimote/config.json') return { id: command.id ?? '', success: true, data: { path: '/c', exists: false, content: '' } };
       return pendingGet;
     });
     const store = new FileEditorStore(send);
