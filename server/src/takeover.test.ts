@@ -54,15 +54,15 @@ describe('findExternalPiProcesses', () => {
   it('excludes pi sub-processes of the current process (server sub-agents)', async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'pimote-takeover-test-'));
 
-    // Create a symlink named 'pi' pointing to 'sleep' so isPiProcess matches argv[0]
     const { symlink } = await import('node:fs/promises');
     const piLink = join(tempDir, 'pi');
-    await symlink('/usr/bin/sleep', piLink);
+    await symlink(process.execPath, piLink);
 
-    const child = spawn(piLink, ['60'], { cwd: tempDir, stdio: 'ignore', detached: true });
+    const child = spawn(piLink, ['-e', 'setTimeout(() => {}, 60000)'], { cwd: tempDir, stdio: 'ignore', detached: true });
     child.unref();
     spawnedProcesses.push(child);
     await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(() => process.kill(child.pid!, 0)).not.toThrow();
 
     const pids = await findExternalPiProcesses(tempDir);
 
@@ -75,7 +75,7 @@ describe('findExternalPiProcesses', () => {
 
     const { symlink, writeFile, chmod, readFile } = await import('node:fs/promises');
     const piLink = join(tempDir, 'pi');
-    await symlink('/usr/bin/sleep', piLink);
+    await symlink(process.execPath, piLink);
 
     const pidFile = join(tempDir, 'pids');
 
@@ -90,11 +90,11 @@ describe('findExternalPiProcesses', () => {
         '#!/bin/sh',
         // Inner layer: runs detached from the test process
         "sh -c '",
-        `  "${piLink}" 60 &`, // child pi (backgrounded)
+        `  "${piLink}" -e "setTimeout(() => {}, 60000)" &`, // child pi (backgrounded)
         `  child_pid=$!`,
         `  parent_pid=$$`,
         `  echo "$parent_pid $child_pid" > "${pidFile}"`,
-        `  exec "${piLink}" 60`, // parent execs into pi
+        `  exec "${piLink}" -e "setTimeout(() => {}, 60000)"`, // parent execs into pi
         "' &",
         // Outer shell exits immediately — orphans the inner tree
         'exit 0',
@@ -144,6 +144,8 @@ describe('findExternalPiProcesses', () => {
       }) as any;
     spawnedProcesses.push(cleanup(parentPid));
     spawnedProcesses.push(cleanup(childPid));
+    expect(() => process.kill(parentPid, 0)).not.toThrow();
+    expect(() => process.kill(childPid, 0)).not.toThrow();
 
     const pids = await findExternalPiProcesses(tempDir);
 
