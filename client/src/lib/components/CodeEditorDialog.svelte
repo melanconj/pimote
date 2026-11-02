@@ -27,6 +27,7 @@
     language = null,
     value = $bindable(''),
     editorView = $bindable(null),
+    headerActions = null,
     toolbar = null,
     onclose,
     oninteractoutside = null,
@@ -53,6 +54,8 @@
     value?: string;
     /** Live CodeMirror view, for toolbars that act on the selection. */
     editorView?: EditorView | null;
+    /** Controls at the right of the title row. */
+    headerActions?: Snippet | null;
     /** Row between header and body, e.g. the tag-wrap toolbar. */
     toolbar?: Snippet | null;
     /** Every explicit close affordance and unhandled Escape route here; the consumer owns veto and confirm semantics. */
@@ -145,6 +148,9 @@
               <div class="text-muted-foreground text-xs">{hint}</div>
             {/if}
           </div>
+          {#if headerActions}
+            {@render headerActions()}
+          {/if}
           {#if badge}
             <Badge variant="outline" class="hidden shrink-0 whitespace-nowrap sm:inline-flex">{badge}</Badge>
           {/if}

@@ -110,6 +110,56 @@ describe('openFile', () => {
   });
 });
 
+describe('folder instruction switching', () => {
+  it('loads each sibling and creates a missing override on save', async () => {
+    const { send, calls } = fakeSend((command) => {
+      if (command.type === 'file_get') {
+        const exists = command.path.endsWith('/AGENTS.md');
+        return { id: '1', success: true, data: { path: command.path, exists, content: exists ? 'shared' : '' } };
+      }
+      return { id: '1', success: true, data: {} };
+    });
+    const store = new FileEditorStore(send);
+    await store.openFolderInstructions('/workspace/project/', 'Project');
+    expect(store.path).toBe('/workspace/project/AGENTS.md');
+    expect(store.title).toBe('AGENTS.md — Project');
+
+    await store.switchFolderInstructions('AGENTS.override.md');
+    expect(store.path).toBe('/workspace/project/AGENTS.override.md');
+    expect(store.title).toBe('AGENTS.override.md — Project');
+    expect(store.loaded).toBe(true);
+    expect(store.exists).toBe(false);
+    expect(store.content).toBe('');
+    store.content = 'personal';
+    expect(await store.save()).toBe(true);
+    expect(calls).toContainEqual({ type: 'file_put', path: '/workspace/project/AGENTS.override.md', content: 'personal' });
+    expect(store.folderInstructions).toBeNull();
+  });
+
+  it('ignores stale loads and refuses to save a failed switch', async () => {
+    let resolveOverride: (response: PimoteResponse) => void = () => {};
+    const pending = new Promise<PimoteResponse>((resolve) => (resolveOverride = resolve));
+    let agentsReads = 0;
+    const { send, calls } = fakeSend((command) => {
+      if (command.type !== 'file_get') return { id: '1', success: true, data: {} };
+      if (command.path.endsWith('/AGENTS.override.md')) return pending;
+      if (command.path.endsWith('/AGENTS.md') && ++agentsReads > 1) return { id: '1', success: false, error: 'EACCES' };
+      return { id: '1', success: true, data: { path: command.path, exists: true, content: 'shared' } };
+    });
+    const store = new FileEditorStore(send);
+    await store.openFolderInstructions('/project');
+    const stale = store.switchFolderInstructions('AGENTS.override.md');
+    await store.switchFolderInstructions('AGENTS.md');
+    resolveOverride(fileGetResponse('stale override'));
+    await stale;
+    expect(store.path).toBe('/project/AGENTS.md');
+    expect(store.error).toBe('EACCES');
+    expect(store.loaded).toBe(false);
+    expect(await store.save()).toBe(false);
+    expect(calls.filter((call) => call.type === 'file_put')).toEqual([]);
+  });
+});
+
 describe('snippet transport', () => {
   it('loads tagSnippets from the pimote config file', async () => {
     const { send } = routingSend(fileGetResponse('body'), {

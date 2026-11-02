@@ -40,7 +40,7 @@ function respond(impl: (command: PimoteCommand) => PimoteResponse | Promise<Pimo
 }
 
 /** Renders the dialog, opens it on an AGENTS.md with `content`, and returns the live editor view. */
-async function openEditor(content: string, opts: { exists?: boolean; snippets?: string[] } = {}): Promise<EditorView> {
+async function openEditor(content: string, opts: { exists?: boolean; snippets?: string[]; folder?: boolean; overrideContent?: string | null } = {}): Promise<EditorView> {
   const target = document.createElement('div');
   document.body.appendChild(target);
   component = mount(ConfigFileEditor, { target });
@@ -51,11 +51,15 @@ async function openEditor(content: string, opts: { exists?: boolean; snippets?: 
       return { id: '1', success: true, data: { path: '/c', exists: true, content: JSON.stringify({ tagSnippets: opts.snippets ?? ['note', 'tip'] }) } };
     }
     if (command.type === 'file_get') {
+      if (command.path.endsWith('/AGENTS.override.md')) {
+        return { id: '1', success: true, data: { path: command.path, exists: opts.overrideContent != null, content: opts.overrideContent ?? '' } };
+      }
       return { id: '1', success: true, data: { path: '/p/AGENTS.md', exists: opts.exists ?? true, content } };
     }
     return { id: '1', success: true, data: { path: '/p/AGENTS.md' } };
   });
-  void fileEditorStore.openFile('~/.pi/agent/AGENTS.md', 'Agent instructions');
+  if (opts.folder) void fileEditorStore.openFolderInstructions('/workspace/project');
+  else void fileEditorStore.openFile('~/.pi/agent/AGENTS.md', 'Agent instructions');
   return editor();
 }
 
@@ -73,6 +77,19 @@ function button(name: string): HTMLButtonElement {
   const match = [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === name || b.getAttribute('aria-label') === name);
   if (!match) throw new Error(`button not found: ${name}`);
   return match;
+}
+
+function fileSelect(): HTMLSelectElement {
+  const select = document.querySelector<HTMLSelectElement>('select[aria-label="Instruction file"]');
+  if (!select) throw new Error('instruction file selector not found');
+  return select;
+}
+
+async function selectFile(file: string): Promise<void> {
+  const select = fileSelect();
+  select.value = file;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  await tick();
 }
 
 function tagInput(): HTMLInputElement | null {
@@ -120,6 +137,84 @@ describe('ConfigFileEditor', () => {
     expect(document.querySelector('.cm-editor')).not.toBeNull();
     expect(button('note')).toBeTruthy();
     expect(button('tip')).toBeTruthy();
+  });
+
+  it('shows the file selector only for folder instructions', async () => {
+    await openEditor('global');
+    expect(document.querySelector('select[aria-label="Instruction file"]')).toBeNull();
+  });
+
+  it('switches between existing folder instructions', async () => {
+    await openEditor('shared', { folder: true, overrideContent: 'personal' });
+    expect(fileSelect().value).toBe('AGENTS.md');
+    await selectFile('AGENTS.override.md');
+    await vi.waitFor(() => expect(fileEditorStore.content).toBe('personal'));
+    expect(fileSelect().value).toBe('AGENTS.override.md');
+    expect(document.body.textContent).toContain('Replaces AGENTS.md in this folder for Pi.');
+    expect(fileEditorStore.path).toBe('/workspace/project/AGENTS.override.md');
+    expect((await editor()).state.doc.toString()).toBe('personal');
+
+    await selectFile('AGENTS.md');
+    await vi.waitFor(() => expect(fileEditorStore.content).toBe('shared'));
+    expect((await editor()).state.doc.toString()).toBe('shared');
+  });
+
+  it('creates a missing override on save', async () => {
+    await openEditor('shared', { folder: true });
+    await selectFile('AGENTS.override.md');
+    await vi.waitFor(() => expect(fileEditorStore.loaded).toBe(true));
+    expect(document.body.textContent).toContain('New file — it will be created on save.');
+    const view = await editor();
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'personal' } });
+    await tick();
+    button('Save').click();
+    await vi.waitFor(() => expect(fileEditorStore.open).toBe(false));
+    expect(vi.mocked(connection.send)).toHaveBeenCalledWith({ type: 'file_put', path: '/workspace/project/AGENTS.override.md', content: 'personal' });
+  });
+
+  it('cannot save an override after its load fails', async () => {
+    await openEditor('shared', { folder: true });
+    respond((command) => {
+      if (command.type === 'file_get' && command.path.endsWith('/AGENTS.override.md')) return { id: '1', success: false, error: 'EACCES' };
+      return { id: '1', success: true, data: { path: '/c', exists: false, content: '' } };
+    });
+    await selectFile('AGENTS.override.md');
+    await vi.waitFor(() => expect(fileEditorStore.error).toBe('EACCES'));
+    expect(button('Save').disabled).toBe(true);
+    expect(document.body.textContent).not.toContain('New file — it will be created on save.');
+    expect(vi.mocked(connection.send)).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'file_put' }));
+  });
+
+  it('disables the selector while saving', async () => {
+    await openEditor('shared', { folder: true });
+    let resolveSave: (response: PimoteResponse) => void = () => {};
+    const pending = new Promise<PimoteResponse>((resolve) => (resolveSave = resolve));
+    respond(() => pending);
+    button('Save').click();
+    await vi.waitFor(() => expect(fileSelect().disabled).toBe(true));
+    resolveSave({ id: '1', success: true, data: {} });
+    await vi.waitFor(() => expect(fileEditorStore.open).toBe(false));
+  });
+
+  it('confirms before discarding edits when switching files', async () => {
+    const view = await openEditor('shared', { folder: true, overrideContent: 'personal' });
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: 'unsaved' } });
+    await tick();
+    await selectFile('AGENTS.override.md');
+    await vi.waitFor(() => expect(confirmDialog()).not.toBeNull());
+    expect(fileSelect().value).toBe('AGENTS.md');
+    expect(fileEditorStore.content).toBe('unsaved');
+    expect(vi.mocked(connection.send)).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'file_get', path: '/workspace/project/AGENTS.override.md' }));
+
+    button('Keep editing').click();
+    await vi.waitFor(() => expect(confirmDialog()).toBeNull());
+    expect(fileEditorStore.content).toBe('unsaved');
+    await selectFile('AGENTS.override.md');
+    await vi.waitFor(() => expect(confirmDialog()).not.toBeNull());
+    button('Discard').click();
+    await vi.waitFor(() => expect(fileEditorStore.content).toBe('personal'));
+    expect(fileSelect().value).toBe('AGENTS.override.md');
+    expect(fileEditorStore.open).toBe(true);
   });
 
   it('tag button toggles the one-line input', async () => {

@@ -6,6 +6,8 @@ import { isValidTagName } from '$lib/tag-wrap.js';
 export type SendCommand = (command: PimoteCommand) => Promise<PimoteResponse>;
 
 export const AGENT_INSTRUCTIONS_PATH = '~/.pi/agent/AGENTS.md';
+export type FolderInstructionsFile = 'AGENTS.md' | 'AGENTS.override.md';
+type FolderInstructions = { folderPath: string; folderName: string; file: FolderInstructionsFile };
 const PIMOTE_CONFIG_PATH = '~/.config/pimote/config.json';
 
 /**
@@ -42,6 +44,7 @@ export class FileEditorStore {
   path = $state<string | null>(null);
   resolvedPath = $state<string | null>(null);
   title = $state('');
+  folderInstructions = $state<FolderInstructions | null>(null);
   content = $state('');
   error = $state<string | null>(null);
   snippets = $state<string[]>([]);
@@ -58,13 +61,14 @@ export class FileEditorStore {
   }
 
   /** Opens the dialog on `path` and loads the file. A missing file opens empty (will-create). */
-  async openFile(path: string, title: string): Promise<void> {
+  async openFile(path: string, title: string, folderInstructions: FolderInstructions | null = null): Promise<void> {
     const generation = ++this.generation;
     this.resetFileState();
     this.open = true;
     this.loading = true;
     this.path = path;
     this.title = title;
+    this.folderInstructions = folderInstructions;
     void this.loadSnippets(generation);
     await this.loadFile(path, generation);
   }
@@ -72,9 +76,21 @@ export class FileEditorStore {
   /** Opens the instructions file belonging to this folder, never a relative server-cwd target. */
   async openFolderInstructions(folderPath: string, folderName?: string): Promise<void> {
     if (!folderPath) return;
-    const path = `${folderPath.replace(/\/+$/, '')}/AGENTS.md`;
     const name = folderName ?? folderPath.split('/').filter(Boolean).at(-1) ?? folderPath;
-    await this.openFile(path, `AGENTS.md — ${name}`);
+    await this.openInstructionsFile({ folderPath, folderName: name, file: 'AGENTS.md' });
+  }
+
+  /** Switches folder instruction files after the caller has handled unsaved changes. */
+  async switchFolderInstructions(file: FolderInstructionsFile): Promise<void> {
+    const instructions = this.folderInstructions;
+    if (!this.open || this.saving || !instructions || instructions.file === file) return;
+    await this.openInstructionsFile({ ...instructions, file });
+  }
+
+  private async openInstructionsFile(instructions: FolderInstructions): Promise<void> {
+    const { folderPath, folderName, file } = instructions;
+    const path = `${folderPath.replace(/\/+$/, '')}/${file}`;
+    await this.openFile(path, `${file} — ${folderName}`, instructions);
   }
 
   /** Saves the full content via file_put and closes on success. Returns whether it saved. */
@@ -119,6 +135,7 @@ export class FileEditorStore {
     this.path = null;
     this.resolvedPath = null;
     this.title = '';
+    this.folderInstructions = null;
     this.content = '';
     this.baseline = '';
     this.error = null;

@@ -4,7 +4,7 @@
   import { Button } from '$lib/components/ui/button/index.js';
   import { Input } from '$lib/components/ui/input/index.js';
   import CodeEditorDialog from '$lib/components/CodeEditorDialog.svelte';
-  import { fileEditorStore } from '$lib/stores/file-editor.svelte.js';
+  import { fileEditorStore, type FolderInstructionsFile } from '$lib/stores/file-editor.svelte.js';
   import { isValidTagName, wrapWithTag } from '$lib/tag-wrap.js';
   import type { EditorView } from '@codemirror/view';
   import TagIcon from '@lucide/svelte/icons/tag';
@@ -15,6 +15,7 @@
   let tagName = $state('');
   let tagInputEl = $state<HTMLInputElement | null>(null);
   let confirmDiscardOpen = $state(false);
+  let pendingFile = $state<FolderInstructionsFile | null>(null);
 
   // Toolbar state is per-open: no stale tag input or typed tag name.
   $effect(() => {
@@ -68,15 +69,37 @@
   function requestClose(): void {
     if (fileEditorStore.saving) return;
     if (fileEditorStore.dirty) {
+      pendingFile = null;
       confirmDiscardOpen = true;
       return;
     }
     fileEditorStore.close();
   }
 
-  function discardAndClose(): void {
+  function requestFileSwitch(event: Event): void {
+    const select = event.currentTarget as HTMLSelectElement;
+    const current = fileEditorStore.folderInstructions?.file;
+    const next = select.value as FolderInstructionsFile;
+    if (!current || current === next) return;
+    // Keep the current selection visible until the switch is confirmed.
+    select.value = current;
+    if (fileEditorStore.dirty) {
+      pendingFile = next;
+      confirmDiscardOpen = true;
+      return;
+    }
+    void fileEditorStore.switchFolderInstructions(next);
+  }
+
+  function discardChanges(): void {
     confirmDiscardOpen = false;
-    fileEditorStore.close();
+    if (pendingFile) {
+      const file = pendingFile;
+      pendingFile = null;
+      void fileEditorStore.switchFolderInstructions(file);
+    } else {
+      fileEditorStore.close();
+    }
   }
 </script>
 
@@ -84,7 +107,12 @@
   bind:open={fileEditorStore.open}
   title={fileEditorStore.title}
   subtitle={fileEditorStore.resolvedPath ?? fileEditorStore.path}
-  hint={fileEditorStore.loaded && !fileEditorStore.exists ? 'New file — it will be created on save.' : null}
+  hint={[
+    fileEditorStore.folderInstructions?.file === 'AGENTS.override.md' ? 'Replaces AGENTS.md in this folder for Pi.' : '',
+    fileEditorStore.loaded && !fileEditorStore.exists ? 'New file — it will be created on save.' : '',
+  ]
+    .filter(Boolean)
+    .join(' ') || null}
   error={fileEditorStore.error}
   saving={fileEditorStore.saving}
   saveDisabled={!fileEditorStore.loaded}
@@ -96,6 +124,20 @@
   onclose={requestClose}
   onsave={() => void fileEditorStore.save()}
 >
+  {#snippet headerActions()}
+    {#if fileEditorStore.folderInstructions}
+      <select
+        aria-label="Instruction file"
+        value={fileEditorStore.folderInstructions.file}
+        onchange={requestFileSwitch}
+        disabled={fileEditorStore.saving}
+        class="border-input bg-background text-foreground h-9 max-w-[40vw] shrink-0 rounded-md border px-2 text-sm disabled:opacity-50 sm:max-w-none"
+      >
+        <option value="AGENTS.md">AGENTS.md</option>
+        <option value="AGENTS.override.md">AGENTS.override.md</option>
+      </select>
+    {/if}
+  {/snippet}
   {#snippet toolbar()}
     <Button variant="outline" size="sm" type="button" aria-label="Wrap selection with a tag" aria-expanded={tagInputVisible} onclick={toggleTagInput}>
       <TagIcon class="size-4" />
@@ -121,7 +163,7 @@
     </Dialog.Header>
     <Dialog.Footer>
       <Button variant="outline" onclick={() => (confirmDiscardOpen = false)}>Keep editing</Button>
-      <Button variant="destructive" onclick={discardAndClose}>Discard</Button>
+      <Button variant="destructive" onclick={discardChanges}>Discard</Button>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>

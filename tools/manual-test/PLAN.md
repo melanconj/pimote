@@ -330,18 +330,22 @@ toolbar (freeform tag input + `tagSnippets` snippet buttons), save
 folder-scoped through three controls: FolderList's row-menu "Edit AGENTS.md…"
 opens the selected folder's instructions; StatusBar's "Edit folder AGENTS.md"
 and SessionDetailsDialog's "Edit AGENTS.md" open the viewed session folder's
-instructions. The session controls disable editing when disconnected, without
-a folder, restoring, or pending; the details dialog closes before the editor
-opens. The global Folders-header pen stays on the user-level Agent
-instructions.
+instructions. The editor's header selector switches between `AGENTS.md` and
+`AGENTS.override.md` in that folder, confirming before discarding unsaved edits.
+A missing file is created on save. Pi uses the override instead of the normal
+instructions in the same folder. The session controls disable editing when
+disconnected, without a folder, restoring, or pending; the details dialog closes
+before the editor opens. The global Folders-header pen stays on the user-level
+Agent instructions.
 
 **Why:** The first-class config-editing surface (first citizen of the future
 server-configuration workflow), added by the `agents-md-editor` topic.
 
 **Driver:** `tools/manual-test/agents-md-editor-smoke/` (sandboxed pimote +
 `agent-browser`). The three folder-scoped controls are pinned by the client
-unit suite (`FolderInstructionsControls.test.ts`); their journey-level clicks
-stay manual-browser.
+unit suite (`FolderInstructionsControls.test.ts`); selector behavior is covered
+by `ConfigFileEditor.test.ts` and `file-editor.svelte.test.ts`. Their
+journey-level clicks stay manual-browser.
 
 ## Automation gap (recorded, not an action item for this topic)
 
